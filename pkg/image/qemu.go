@@ -113,11 +113,11 @@ func convertToRaw(src, dest string, preallocate bool) error {
 	args := []string{"convert", "-t", "none", "-p", "-O", "raw", src, dest}
 	var err error
 	if preallocate {
-		err = addPreallocation(preallocate, args, convertPreallocationMethods, func(args []string) ([]byte, error) {
-			return qemuExecFunction(nil, nil, "qemu-img", args...)
+		err = addPreallocation(args, convertPreallocationMethods, func(args []string) ([]byte, error) {
+			return qemuExecFunction(nil, reportProgress, "qemu-img", args...)
 		})
 	} else {
-		_, err = qemuExecFunction(nil, nil, "qemu-img", args...)
+		_, err = qemuExecFunction(nil, reportProgress, "qemu-img", args...)
 	}
 	if err != nil {
 		os.Remove(dest)
@@ -138,7 +138,7 @@ func (o *qemuOperations) ConvertToRawStream(url *url.URL, dest string, prealloca
 	var err error
 	args := []string{"convert", "-t", "none", "-p", "-O", "raw", jsonArg, dest}
 	if preallocate {
-		err = addPreallocation(preallocate, args, convertPreallocationMethods, func(args []string) ([]byte, error) {
+		err = addPreallocation(args, convertPreallocationMethods, func(args []string) ([]byte, error) {
 			return qemuExecFunction(nil, reportProgress, "qemu-img", args...)
 		})
 	} else {
@@ -167,7 +167,7 @@ func (o *qemuOperations) Resize(image string, size resource.Quantity, preallocat
 	var err error
 	args := []string{"resize", "-f", "raw", image, convertQuantityToQemuSize(size)}
 	if preallocate {
-		err = addPreallocation(preallocate, args, resizePreallocationMethods, func(args []string) ([]byte, error) {
+		err = addPreallocation(args, resizePreallocationMethods, func(args []string) ([]byte, error) {
 			return qemuExecFunction(nil, nil, "qemu-img", args...)
 		})
 	} else {
@@ -298,22 +298,21 @@ func PreallocateBlankBlock(dest string, size resource.Quantity) error {
 	return nil
 }
 
-func addPreallocation(preallocate bool, args []string, preallocationMethods [][]string, fn func(args []string) ([]byte, error)) error {
+func addPreallocation(args []string, preallocationMethods [][]string, qemuFn func(args []string) ([]byte, error)) error {
 	var err error
-	preallocationMethod := 0
-	for retry := true; retry; retry = err != nil && preallocationMethod < len(preallocationMethods) {
-		var argsToTry []string
+	for _, preallocationMethod := range preallocationMethods {
 		var output []byte
-		if preallocate {
-			klog.V(1).Info("Added preallocation")
-			// For some subcommands (e.g. resize), preallocation optinos must come before other options
-			argsToTry = append([]string{args[0]}, preallocationMethods[preallocationMethod]...)
-			argsToTry = append(argsToTry, args[1:]...)
-		}
-		output, err = fn(argsToTry)
+
+		klog.V(1).Infof("Adding preallocation method: %v", preallocationMethod)
+		// For some subcommands (e.g. resize), preallocation optinos must come before other options
+		argsToTry := append([]string{args[0]}, preallocationMethod...)
+		argsToTry = append(argsToTry, args[1:]...)
+
+		output, err = qemuFn(argsToTry)
 		if err != nil && strings.Contains(string(output), "Unsupported preallocation mode") {
-			preallocationMethod++
-			klog.V(1).Infof("Unsupported preallocation mode. Retrying with %s", preallocationMethods[preallocationMethod])
+			klog.V(1).Infof("Unsupported preallocation mode. Retrying")
+		} else {
+			break
 		}
 	}
 
