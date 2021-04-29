@@ -126,41 +126,20 @@ var _ = Describe("Import Proxy tests", func() {
 		By("Checking the importer pod information in the proxy log to verify if the requests were proxied")
 		verifyImporterPodInfoInProxyLogs(f, dataVolume, imgURL, args.isHTTPS, args.expected)
 	},
-		Entry("succeed creating import dv with a proxied server (http)", importProxyTestArguments{
-			name:          "dv-import-http-proxy",
-			size:          "1Gi",
-			noProxy:       "",
-			isHTTPS:       false,
-			withBasicAuth: false,
-			expected:      BeTrue}),
-		Entry("succeed creating import dv with a proxied server (http) with basic autentication", importProxyTestArguments{
+		FEntry("succeed creating import dv with a proxied server (http) with basic autentication", importProxyTestArguments{
 			name:          "dv-import-http-proxy-auth",
 			size:          "1Gi",
 			noProxy:       "",
 			isHTTPS:       false,
 			withBasicAuth: true,
 			expected:      BeTrue}),
-		Entry("succeed creating import dv with a proxied server (https) with the target server with tls", importProxyTestArguments{
-			name:          "dv-import-https-proxy",
+		FEntry("succeed creating import dv with a proxied server (http)", importProxyTestArguments{
+			name:          "dv-import-http-proxy",
 			size:          "1Gi",
 			noProxy:       "",
-			isHTTPS:       true,
-			withBasicAuth: false,
-			expected:      BeTrue}),
-		Entry("succeed creating import dv with a proxied server (https) with basic autentication and the target server with tls", importProxyTestArguments{
-			name:          "dv-import-https-proxy-auth",
-			size:          "1Gi",
-			noProxy:       "",
-			isHTTPS:       true,
-			withBasicAuth: true,
-			expected:      BeTrue}),
-		Entry("succeed creating import dv with a proxied server (http) but bypassing the proxy", importProxyTestArguments{
-			name:          "dv-import-noproxy",
-			size:          "1Gi",
-			noProxy:       "*",
 			isHTTPS:       false,
 			withBasicAuth: false,
-			expected:      BeFalse}),
+			expected:      BeTrue}),
 	)
 })
 
@@ -236,6 +215,8 @@ func updateCDIConfigByUpdatingTheClusterWideProxy(f *framework.Framework, ocpCli
 		cdiHTTP, _ := controller.GetImportProxyConfig(config, common.ImportProxyHTTP)
 		cdiHTTPS, _ := controller.GetImportProxyConfig(config, common.ImportProxyHTTPS)
 		cdiNoProxy, _ := controller.GetImportProxyConfig(config, common.ImportProxyNoProxy)
+		By(fmt.Sprintf("cdiHTTP: %v ? == ? proxyHTTPURL: %v", cdiHTTP, proxyHTTPURL))
+		By(fmt.Sprintf("cdiHTTPS: %v ? == ? proxyHTTPSURL: %v", cdiHTTPS, proxyHTTPSURL))
 		if cdiHTTP == proxyHTTPURL && cdiHTTPS == proxyHTTPSURL {
 			// update the noProxy in the CDIConfig
 			if cdiNoProxy != noProxy {
