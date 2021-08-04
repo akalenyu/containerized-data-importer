@@ -17,7 +17,7 @@
 SCRIPT_ROOT="$(cd "$(dirname $0)/../" && pwd -P)"
 
 # the kubevirtci commit hash to vendor from
-kubevirtci_git_hash=142f7450f94d866db863b4af254b5428fe1c570a
+kubevirtci_git_hash=f3c5322c68175a2fce1d6f5d3c8da82a3817c35d
 
 # remove previous cluster-up dir entirely before vendoring
 rm -rf ${SCRIPT_ROOT}/cluster-up
