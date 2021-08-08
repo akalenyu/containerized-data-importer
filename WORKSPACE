@@ -160,6 +160,14 @@ container_pull(
     tag = "33",
 )
 
+container_pull(
+    name = "centos",
+    digest = "sha256:dbbacecc49b088458781c16f3775f2a2ec7521079034a7ba499c8b0bb7f86875",
+    registry = "quay.io",
+    repository = "centos/centos",
+    tag = "8",
+)
+
 # Pull base image container registry
 container_pull(
     name = "registry",

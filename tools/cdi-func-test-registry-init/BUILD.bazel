@@ -71,7 +71,7 @@ pkg_tar(
 #Populate
 rpm_image(
     name = "cdi-func-test-registry-populate-base-image",
-    base = "@fedora//image",
+    base = "@centos//image",
     rpms = [
         "@buildah//file",
         "@libseccomp//file",
