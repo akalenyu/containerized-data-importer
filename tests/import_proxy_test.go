@@ -39,7 +39,7 @@ const (
 	imgPort          = ":82" //we used the port with rate limit to be able to inspect the pod before it finishes
 )
 
-var _ = Describe("Import Proxy tests", func() {
+var _ = PDescribe("Import Proxy tests", func() {
 	var (
 		dvName               string
 		ocpClient            *configclient.Clientset
