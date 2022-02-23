@@ -20,6 +20,8 @@ const (
 	TinyCoreFile = "/tinyCore.iso"
 	// CirrosQCow2File is the file name of cirros qcow
 	CirrosQCow2File = "/cirros-qcow2.img"
+	// UploadArchiveFile is the file to upload for upload archive tests
+	UploadArchiveFile = imagesPath + "/upload-archive.tar"
 	// UploadFile is the file to upload
 	UploadFile = imagesPath + TinyCoreFile
 	// UploadFileLargeVirtualDiskQcow is the file to upload (QCOW2)

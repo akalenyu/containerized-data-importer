@@ -201,7 +201,7 @@ var _ = Describe("[rfe_id:138][crit:high][vendor:cnv-qe@redhat.com][level:compon
 		tinyCoreFileMd5, err := util.Md5sum(utils.UploadFile)
 		Expect(err).ToNot(HaveOccurred())
 		filesToUpload := map[string]string{utils.TinyCoreFile: tinyCoreFileMd5, utils.CirrosQCow2File: cirrosFileMd5}
-		archiveFilePath, err := utils.ArchiveFiles("archive", os.TempDir(), utils.UploadFile, utils.UploadCirrosFile)
+		archiveFilePath := utils.UploadArchiveFile
 		Expect(err).ToNot(HaveOccurred())
 		if format != "" {
 			archiveFilePath, err = utils.FormatTestData(archiveFilePath, os.TempDir(), format)
