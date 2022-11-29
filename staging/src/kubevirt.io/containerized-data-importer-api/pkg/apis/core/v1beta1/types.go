@@ -123,6 +123,7 @@ type DataVolumeSource struct {
 	Blank    *DataVolumeBlankImage     `json:"blank,omitempty"`
 	Imageio  *DataVolumeSourceImageIO  `json:"imageio,omitempty"`
 	VDDK     *DataVolumeSourceVDDK     `json:"vddk,omitempty"`
+	Snapshot *DataVolumeSourceSnapshot `json:"snapshot,omitempty"`
 }
 
 // DataVolumeSourcePVC provides the parameters to create a Data Volume from an existing PVC
@@ -130,6 +131,14 @@ type DataVolumeSourcePVC struct {
 	// The namespace of the source PVC
 	Namespace string `json:"namespace"`
 	// The name of the source PVC
+	Name string `json:"name"`
+}
+
+// DataVolumeSourceSnapshot provides the parameters to create a Data Volume from an existing VolumeSnapshot
+type DataVolumeSourceSnapshot struct {
+	// The namespace of the source VolumeSnapshot
+	Namespace string `json:"namespace"`
+	// The name of the source VolumeSnapshot
 	Name string `json:"name"`
 }
 
@@ -313,6 +322,9 @@ const (
 
 	// SnapshotForSmartCloneInProgress represents a data volume with a current phase of SnapshotForSmartCloneInProgress
 	SnapshotForSmartCloneInProgress DataVolumePhase = "SnapshotForSmartCloneInProgress"
+
+	// CloneFromSnapshotSourceInProgress represents a data volume with a current phase of CloneFromSnapshotSourceInProgress
+	CloneFromSnapshotSourceInProgress DataVolumePhase = "CloneFromSnapshotSourceInProgress"
 
 	// SmartClonePVCInProgress represents a data volume with a current phase of SmartClonePVCInProgress
 	SmartClonePVCInProgress DataVolumePhase = "SmartClonePVCInProgress"

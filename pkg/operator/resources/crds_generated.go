@@ -5217,6 +5217,20 @@ spec:
                             required:
                             - url
                             type: object
+                          snapshot:
+                            description: DataVolumeSourceSnapshot provides the parameters
+                              to create a Data Volume from an existing VolumeSnapshot
+                            properties:
+                              name:
+                                description: The name of the source VolumeSnapshot
+                                type: string
+                              namespace:
+                                description: The namespace of the source VolumeSnapshot
+                                type: string
+                            required:
+                            - name
+                            - namespace
+                            type: object
                           upload:
                             description: DataVolumeSourceUpload provides the parameters
                               to create a Data Volume by uploading the source
@@ -6037,6 +6051,20 @@ spec:
                         type: string
                     required:
                     - url
+                    type: object
+                  snapshot:
+                    description: DataVolumeSourceSnapshot provides the parameters
+                      to create a Data Volume from an existing VolumeSnapshot
+                    properties:
+                      name:
+                        description: The name of the source VolumeSnapshot
+                        type: string
+                      namespace:
+                        description: The namespace of the source VolumeSnapshot
+                        type: string
+                    required:
+                    - name
+                    - namespace
                     type: object
                   upload:
                     description: DataVolumeSourceUpload provides the parameters to

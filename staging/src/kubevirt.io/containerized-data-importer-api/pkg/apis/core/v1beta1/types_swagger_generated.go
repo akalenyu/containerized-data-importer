@@ -58,6 +58,14 @@ func (DataVolumeSourcePVC) SwaggerDoc() map[string]string {
 	}
 }
 
+func (DataVolumeSourceSnapshot) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":          "DataVolumeSourceSnapshot provides the parameters to create a Data Volume from an existing VolumeSnapshot",
+		"namespace": "The namespace of the source VolumeSnapshot",
+		"name":      "The name of the source VolumeSnapshot",
+	}
+}
+
 func (DataVolumeBlankImage) SwaggerDoc() map[string]string {
 	return map[string]string{
 		"": "DataVolumeBlankImage provides the parameters to create a new raw blank image for the PVC",
