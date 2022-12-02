@@ -220,7 +220,7 @@ func (r *SmartCloneReconciler) reconcileSnapshot(log logr.Logger, snapshot *snap
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	newPvc, err := newPvcFromSnapshot(snapshot, targetPvcSpec)
+	newPvc, err := newPvcFromSnapshot(snapshot.Name, snapshot, targetPvcSpec)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -278,6 +278,11 @@ func (r *SmartCloneReconciler) deleteSnapshot(log logr.Logger, namespace, name s
 		return nil
 	}
 
+	if _, ok := snapshotToDelete.Labels[common.CDIComponentLabel]; !ok {
+		// Not a CDI snapshot, don't delete
+		return nil
+	}
+
 	if err := r.client.Delete(context.TODO(), snapshotToDelete); err != nil {
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "error deleting snapshot for smart-clone")
@@ -329,7 +334,7 @@ func (r *SmartCloneReconciler) getTargetPVC(dataVolume *cdiv1.DataVolume) (*core
 	return pvc, nil
 }
 
-func newPvcFromSnapshot(snapshot *snapshotv1.VolumeSnapshot, targetPvcSpec *corev1.PersistentVolumeClaimSpec) (*corev1.PersistentVolumeClaim, error) {
+func newPvcFromSnapshot(name string, snapshot *snapshotv1.VolumeSnapshot, targetPvcSpec *corev1.PersistentVolumeClaimSpec) (*corev1.PersistentVolumeClaim, error) {
 	restoreSize := snapshot.Status.RestoreSize
 	if restoreSize == nil {
 		return nil, fmt.Errorf("snapshot has no RestoreSize")
@@ -351,7 +356,7 @@ func newPvcFromSnapshot(snapshot *snapshotv1.VolumeSnapshot, targetPvcSpec *core
 
 	target := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      snapshot.Name,
+			Name:      name,
 			Namespace: snapshot.Namespace,
 			Labels:    labels,
 			Annotations: map[string]string{

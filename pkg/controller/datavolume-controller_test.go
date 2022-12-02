@@ -1628,7 +1628,7 @@ var _ = Describe("All DataVolume Tests", func() {
 
 			prePopulated := false
 			pvcPopulated := true
-			result, err := reconciler.reconcileClone(reconciler.log, dv, pvc, dv.Spec.PVC.DeepCopy(), "", prePopulated, pvcPopulated)
+			result, err := reconciler.reconcilePvcClone(reconciler.log, dv, pvc, dv.Spec.PVC.DeepCopy(), "", prePopulated, pvcPopulated)
 			Expect(err).ToNot(HaveOccurred())
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}, dv)
 			Expect(err).ToNot(HaveOccurred())
