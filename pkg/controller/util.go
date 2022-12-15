@@ -170,11 +170,15 @@ var (
 )
 
 func isCrossNamespaceClone(dv *cdiv1.DataVolume) bool {
-	if dv.Spec.Source.PVC == nil {
-		return false
+	if dv.Spec.Source.PVC != nil {
+		return dv.Spec.Source.PVC.Namespace != "" && dv.Spec.Source.PVC.Namespace != dv.Namespace
 	}
 
-	return dv.Spec.Source.PVC.Namespace != "" && dv.Spec.Source.PVC.Namespace != dv.Namespace
+	if dv.Spec.Source.Snapshot != nil {
+		return dv.Spec.Source.Snapshot.Namespace != "" && dv.Spec.Source.Snapshot.Namespace != dv.Namespace
+	}
+
+	return false
 }
 
 func checkPVC(pvc *v1.PersistentVolumeClaim, annotation string, log logr.Logger) bool {

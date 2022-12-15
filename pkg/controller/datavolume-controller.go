@@ -1460,12 +1460,7 @@ func (r *DatavolumeReconciler) cleanupTransfer(log logr.Logger, dv *cdiv1.DataVo
 		// delete all potential PVCs that may not have owner refs
 		namespaces := []string{dv.Namespace}
 		names := []string{dv.Name}
-		if dv.Spec.Source.PVC != nil &&
-			dv.Spec.Source.PVC.Namespace != "" &&
-			dv.Spec.Source.PVC.Namespace != dv.Namespace {
-			namespaces = append(namespaces, dv.Spec.Source.PVC.Namespace)
-			names = append(names, name)
-		}
+		appendTmpPvcIfNeeded(dv, namespaces, names, name)
 
 		for i := range namespaces {
 			pvc := &corev1.PersistentVolumeClaim{}
@@ -3297,4 +3292,13 @@ func getCloneSourceNameAndNamespace(dv *cdiv1.DataVolume) (name, namespace strin
 	}
 
 	return sourceName, sourceNamespace
+}
+
+func appendTmpPvcIfNeeded(dv *cdiv1.DataVolume, names, namespaces []string, pvcName string) {
+	_, sourceNamespace := getCloneSourceNameAndNamespace(dv)
+
+	if sourceNamespace != "" && sourceNamespace != dv.Namespace {
+		namespaces = append(namespaces, sourceNamespace)
+		names = append(names, pvcName)
+	}
 }
