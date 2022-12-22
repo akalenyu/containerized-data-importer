@@ -346,6 +346,32 @@ func GetDefaultStorageClass(client client.Client) (*storagev1.StorageClass, erro
 	return nil, nil
 }
 
+// GetStorageClassCorrespondingToSnapClass returns the storage class that corresponds to the snapshot driver or nil if none found
+func GetStorageClassCorrespondingToSnapClass(client client.Client, driver string) (string, error) {
+	matches := []storagev1.StorageClass{}
+
+	storageClasses := &storagev1.StorageClassList{}
+	if err := client.List(context.TODO(), storageClasses); err != nil {
+		klog.V(3).Info("Unable to retrieve available storage classes")
+		return "", errors.New("unable to retrieve storage classes")
+	}
+	for _, storageClass := range storageClasses.Items {
+		if storageClass.Provisioner == driver {
+			matches = append(matches, storageClass)
+		}
+	}
+
+	if len(matches) > 1 {
+		klog.V(3).Infof("more than one storage class match for snapshot driver, picking first: %s", matches[0].Name)
+		return matches[0].Name, nil
+	}
+	if len(matches) == 0 {
+		return "", errors.New("no storage class match for snapshot driver")
+	}
+
+	return matches[0].Name, nil
+}
+
 // GetFilesystemOverheadForStorageClass determines the filesystem overhead defined in CDIConfig for the storageClass.
 func GetFilesystemOverheadForStorageClass(client client.Client, storageClassName *string) (cdiv1.Percent, error) {
 	cdiConfig := &cdiv1.CDIConfig{}

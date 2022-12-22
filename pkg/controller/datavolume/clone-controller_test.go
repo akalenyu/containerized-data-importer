@@ -43,6 +43,7 @@ import (
 	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 	"kubevirt.io/containerized-data-importer/pkg/common"
 	. "kubevirt.io/containerized-data-importer/pkg/controller/common"
+	cc "kubevirt.io/containerized-data-importer/pkg/controller/common"
 	featuregates "kubevirt.io/containerized-data-importer/pkg/feature-gates"
 	"kubevirt.io/containerized-data-importer/pkg/token"
 )
@@ -555,6 +556,173 @@ var _ = Describe("All DataVolume Tests", func() {
 
 	})
 
+	var _ = Describe("Clone from volumesnapshot source", func() {
+		createSnapshotInVolumeSnapshotClass := func(name, ns string, snapClassName *string, annotations, labels map[string]string, readyToUse bool) *snapshotv1.VolumeSnapshot {
+			pvcName := "some-pvc-that-was-snapshotted"
+			size := resource.MustParse("1G")
+
+			return &snapshotv1.VolumeSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: ns,
+				},
+				Spec: snapshotv1.VolumeSnapshotSpec{
+					Source: snapshotv1.VolumeSnapshotSource{
+						PersistentVolumeClaimName: &pvcName,
+					},
+					VolumeSnapshotClassName: snapClassName,
+				},
+				Status: &snapshotv1.VolumeSnapshotStatus{
+					ReadyToUse:  &readyToUse,
+					RestoreSize: &size,
+				},
+			}
+		}
+
+		It("Should create a restore PVC if snapclass exists and no reason to fall back to host assisted", func() {
+			dv := newCloneFromSnapshotDataVolume("test-dv")
+			scName := "testsc"
+			expectedSnapshotClass := "snap-class"
+			sc := CreateStorageClassWithProvisioner(scName, map[string]string{
+				AnnDefaultStorageClass: "true",
+			}, map[string]string{}, "csi-plugin")
+			sp := createStorageProfile(scName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+
+			dv.Spec.PVC.StorageClassName = &scName
+			snapshot := createSnapshotInVolumeSnapshotClass("test-snap", metav1.NamespaceDefault, &expectedSnapshotClass, nil, nil, true)
+			snapClass := createSnapshotClass(expectedSnapshotClass, nil, "csi-plugin")
+			reconciler = createCloneReconciler(sc, sp, dv, snapshot, snapClass, createVolumeSnapshotContentCrd(), createVolumeSnapshotClassCrd(), createVolumeSnapshotCrd())
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}})
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Verifying that target PVC now exists")
+			pvc := &corev1.PersistentVolumeClaim{}
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: dv.Namespace, Name: dv.Name}, pvc)
+			Expect(err).ToNot(HaveOccurred())
+			expectedDataSource := &corev1.TypedLocalObjectReference{
+				Name:     snapshot.Name,
+				Kind:     "VolumeSnapshot",
+				APIGroup: &snapshotv1.SchemeGroupVersion.Group,
+			}
+			Expect(pvc.Spec.DataSource).To(Equal(expectedDataSource))
+			Expect(pvc.Labels[common.AppKubernetesPartOfLabel]).To(Equal("testing"))
+
+			dv = &cdiv1.DataVolume{}
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}, dv)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(dv.Status.Phase).To(Equal(cdiv1.CloneFromSnapshotSourceInProgress))
+		})
+
+		It("Should fall back to host assisted when target DV storage class has different provisioner", func() {
+			dv := newCloneFromSnapshotDataVolume("test-dv")
+			scName := "testsc"
+			expectedSnapshotClass := "snap-class"
+			sc := CreateStorageClassWithProvisioner(scName, map[string]string{
+				AnnDefaultStorageClass: "true",
+			}, map[string]string{}, "csi-plugin")
+			targetScName := "targetsc"
+			tsc := CreateStorageClassWithProvisioner(targetScName, map[string]string{}, map[string]string{}, "another-csi-plugin")
+			sp := createStorageProfile(scName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+			sp2 := createStorageProfile(targetScName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+
+			dv.Spec.PVC.StorageClassName = &targetScName
+			snapshot := createSnapshotInVolumeSnapshotClass("test-snap", metav1.NamespaceDefault, &expectedSnapshotClass, nil, nil, true)
+			snapClass := createSnapshotClass(expectedSnapshotClass, nil, "csi-plugin")
+			reconciler = createCloneReconciler(sc, tsc, sp, sp2, dv, snapshot, snapClass, createVolumeSnapshotContentCrd(), createVolumeSnapshotClassCrd(), createVolumeSnapshotCrd())
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}})
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Verifying that temp host assisted source PVC is being created")
+			pvc := &corev1.PersistentVolumeClaim{}
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: snapshot.Namespace, Name: snapshot.Name}, pvc)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pvc.Labels[common.CDIComponentLabel]).To(Equal("cdi-clone-from-snapshot-source-host-assisted-fallback-pvc"))
+			Expect(pvc.Labels[common.AppKubernetesPartOfLabel]).To(Equal("testing"))
+			By("Verifying that target host assisted PVC is being created")
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: dv.Namespace, Name: dv.Name}, pvc)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pvc.Labels[common.AppKubernetesPartOfLabel]).To(Equal("testing"))
+			Expect(pvc.Annotations[cc.AnnCloneRequest]).To(Equal(fmt.Sprintf("%s/%s", snapshot.Namespace, snapshot.Name)))
+			By("Mark target PVC bound like it would be in a live cluster, so DV status is updated")
+			pvc.Status.Phase = corev1.ClaimBound
+			err = reconciler.client.Update(context.TODO(), pvc)
+			Expect(err).ToNot(HaveOccurred())
+			_, err = reconciler.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}})
+			Expect(err).ToNot(HaveOccurred())
+
+			dv = &cdiv1.DataVolume{}
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}, dv)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(dv.Status.Phase).To(Equal(cdiv1.CloneScheduled))
+		})
+
+		It("Should pick first storage class when host assisted fallback is needed but multiple matching storage classes exist", func() {
+			dv := newCloneFromSnapshotDataVolume("test-dv")
+			scName := "testsc"
+			expectedSnapshotClass := "snap-class"
+			sc := CreateStorageClassWithProvisioner(scName, map[string]string{
+				AnnDefaultStorageClass: "true",
+			}, map[string]string{}, "csi-plugin")
+			targetScName := "targetsc"
+			scSameProvisioner := sc.DeepCopy()
+			scSameProvisioner.Name = "same-provisioner-as-source-sc"
+			tsc := CreateStorageClassWithProvisioner(targetScName, map[string]string{}, map[string]string{}, "another-csi-plugin")
+			sp := createStorageProfile(scName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+			sp2 := createStorageProfile(targetScName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+			sp3 := createStorageProfile(scSameProvisioner.Name, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+
+			dv.Spec.PVC.StorageClassName = &targetScName
+			snapshot := createSnapshotInVolumeSnapshotClass("test-snap", metav1.NamespaceDefault, &expectedSnapshotClass, nil, nil, true)
+			snapClass := createSnapshotClass(expectedSnapshotClass, nil, "csi-plugin")
+			reconciler = createCloneReconciler(sc, scSameProvisioner, tsc, sp, sp2, sp3, dv, snapshot, snapClass, createVolumeSnapshotContentCrd(), createVolumeSnapshotClassCrd(), createVolumeSnapshotCrd())
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Should clean up host assisted source temp PVC when done", func() {
+			dv := newCloneFromSnapshotDataVolume("test-dv")
+			dv.Status.Phase = cdiv1.Succeeded
+			scName := "testsc"
+			expectedSnapshotClass := "snap-class"
+			sc := CreateStorageClassWithProvisioner(scName, map[string]string{
+				AnnDefaultStorageClass: "true",
+			}, map[string]string{}, "csi-plugin")
+			targetScName := "targetsc"
+			tsc := CreateStorageClassWithProvisioner(targetScName, map[string]string{}, map[string]string{}, "another-csi-plugin")
+			sp := createStorageProfile(scName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+			sp2 := createStorageProfile(targetScName, []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany}, BlockMode)
+
+			dv.Spec.PVC.StorageClassName = &targetScName
+			snapshot := createSnapshotInVolumeSnapshotClass("test-snap", metav1.NamespaceDefault, &expectedSnapshotClass, nil, nil, true)
+			labels := map[string]string{
+				common.CDIComponentLabel: "cdi-clone-from-snapshot-source-host-assisted-fallback-pvc",
+			}
+			tempHostAssistedPvc := CreatePvcInStorageClass(snapshot.Name, snapshot.Namespace, &scName, nil, labels, corev1.ClaimBound)
+			err := setAnnOwnedByDataVolume(tempHostAssistedPvc, dv)
+			Expect(err).ToNot(HaveOccurred())
+			// mimic target PVC being aroud
+			annotations := map[string]string{
+				AnnCloneToken: "foobar",
+			}
+			targetPvc := CreatePvcInStorageClass(dv.Name, dv.Namespace, &targetScName, annotations, nil, corev1.ClaimBound)
+			controller := true
+			targetPvc.OwnerReferences = append(targetPvc.OwnerReferences, metav1.OwnerReference{
+				Kind:       "DataVolume",
+				Controller: &controller,
+				Name:       "test-dv",
+				UID:        dv.UID,
+			})
+			snapClass := createSnapshotClass(expectedSnapshotClass, nil, "csi-plugin")
+			reconciler = createCloneReconciler(sc, tsc, sp, sp2, dv, snapshot, tempHostAssistedPvc, targetPvc, snapClass, createVolumeSnapshotContentCrd(), createVolumeSnapshotClassCrd(), createVolumeSnapshotCrd())
+			_, err = reconciler.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}})
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Verifying that temp host assisted source PVC is being deleted")
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: tempHostAssistedPvc.Namespace, Name: tempHostAssistedPvc.Name}, tempHostAssistedPvc)
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		})
+	})
+
 	var _ = Describe("Clone without source", func() {
 		scName := "testsc"
 		sc := CreateStorageClassWithProvisioner(scName, map[string]string{
@@ -602,7 +770,7 @@ var _ = Describe("All DataVolume Tests", func() {
 
 			//prePopulated := false
 			//pvcPopulated := true
-			result, err := reconciler.reconcileClone(reconciler.log, dv, pvc, dv.Spec.PVC.DeepCopy(), "")
+			result, err := reconciler.reconcilePvcClone(reconciler.log, dv, pvc, dv.Spec.PVC.DeepCopy(), "")
 			Expect(err).ToNot(HaveOccurred())
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "test-dv", Namespace: metav1.NamespaceDefault}, dv)
 			Expect(err).ToNot(HaveOccurred())
@@ -1007,6 +1175,41 @@ func newCloneDataVolumeWithPVCNS(name string, pvcNamespace string) *cdiv1.DataVo
 				PVC: &cdiv1.DataVolumeSourcePVC{
 					Name:      "test",
 					Namespace: pvcNamespace,
+				},
+			},
+			PriorityClassName: "p0-clone",
+			PVC: &corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("1G"),
+					},
+				},
+			},
+		},
+	}
+}
+
+func newCloneFromSnapshotDataVolume(name string) *cdiv1.DataVolume {
+	return newCloneFromSnapshotDataVolumeWithPVCNS(name, "default")
+}
+
+func newCloneFromSnapshotDataVolumeWithPVCNS(name string, snapNamespace string) *cdiv1.DataVolume {
+	return &cdiv1.DataVolume{
+		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: metav1.NamespaceDefault,
+			Annotations: map[string]string{
+				AnnCloneToken: "foobar",
+			},
+			UID: types.UID("uid"),
+		},
+		Spec: cdiv1.DataVolumeSpec{
+			Source: &cdiv1.DataVolumeSource{
+				Snapshot: &cdiv1.DataVolumeSourceSnapshot{
+					Name:      "test-snap",
+					Namespace: snapNamespace,
 				},
 			},
 			PriorityClassName: "p0-clone",
