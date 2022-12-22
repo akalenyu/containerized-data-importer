@@ -1056,12 +1056,7 @@ func (r CloneReconciler) cleanup(dv *cdiv1.DataVolume) error {
 		// delete all potential PVCs that may not have owner refs
 		namespaces := []string{dv.Namespace}
 		names := []string{dv.Name}
-		if dv.Spec.Source.PVC != nil &&
-			dv.Spec.Source.PVC.Namespace != "" &&
-			dv.Spec.Source.PVC.Namespace != dv.Namespace {
-			namespaces = append(namespaces, dv.Spec.Source.PVC.Namespace)
-			names = append(names, transferName)
-		}
+		appendTmpPvcIfNeeded(dv, namespaces, names, transferName)
 
 		for i := range namespaces {
 			pvc := &corev1.PersistentVolumeClaim{}
@@ -2054,14 +2049,27 @@ func sizeDetectionPodName(pvc *corev1.PersistentVolumeClaim) string {
 }
 
 func isCrossNamespaceClone(dv *cdiv1.DataVolume) bool {
-	if dv.Spec.Source.PVC == nil {
-		return false
+	if dv.Spec.Source.PVC != nil {
+		return dv.Spec.Source.PVC.Namespace != "" && dv.Spec.Source.PVC.Namespace != dv.Namespace
 	}
 
-	return dv.Spec.Source.PVC.Namespace != "" && dv.Spec.Source.PVC.Namespace != dv.Namespace
+	if dv.Spec.Source.Snapshot != nil {
+		return dv.Spec.Source.Snapshot.Namespace != "" && dv.Spec.Source.Snapshot.Namespace != dv.Namespace
+	}
+
+	return false
 }
 
 // isPodComplete returns true if a pod is in 'Succeeded' phase, false if not
 func isPodComplete(pod *v1.Pod) bool {
 	return pod != nil && pod.Status.Phase == v1.PodSucceeded
+}
+
+func appendTmpPvcIfNeeded(dv *cdiv1.DataVolume, names, namespaces []string, pvcName string) {
+	_, sourceNamespace := cc.GetCloneSourceNameAndNamespace(dv)
+
+	if sourceNamespace != "" && sourceNamespace != dv.Namespace {
+		namespaces = append(namespaces, sourceNamespace)
+		names = append(names, pvcName)
+	}
 }
