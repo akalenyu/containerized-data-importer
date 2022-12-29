@@ -691,6 +691,29 @@ func (f *Framework) IsSnapshotStorageClassAvailable() bool {
 	return false
 }
 
+// GetSnapshotClass returns the volume snapshot class.
+func (f *Framework) GetSnapshotClass() *snapshotv1.VolumeSnapshotClass {
+	// Fetch the storage class
+	storageclass, err := f.K8sClient.StorageV1().StorageClasses().Get(context.TODO(), f.SnapshotSCName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+
+	scs := &snapshotv1.VolumeSnapshotClassList{}
+	if err = f.CrClient.List(context.TODO(), scs); err != nil {
+		return nil
+	}
+
+	for _, snapshotClass := range scs.Items {
+		// Validate association between snapshot class and storage class
+		if snapshotClass.Driver == storageclass.Provisioner {
+			return &snapshotClass
+		}
+	}
+
+	return nil
+}
+
 // IsBlockVolumeStorageClassAvailable checks if the block volume storage class exists.
 func (f *Framework) IsBlockVolumeStorageClassAvailable() bool {
 	sc, err := f.K8sClient.StorageV1().StorageClasses().Get(context.TODO(), f.BlockSCName, metav1.GetOptions{})
