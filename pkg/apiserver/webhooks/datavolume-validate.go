@@ -285,6 +285,23 @@ func (wh *dataVolumeValidatingWebhook) validateDataVolumeSpec(request *admission
 		}
 	}
 
+	if spec.Source.Snapshot != nil {
+		if spec.Source.Snapshot.Namespace == "" || spec.Source.Snapshot.Name == "" {
+			causes = append(causes, metav1.StatusCause{
+				Type:    metav1.CauseTypeFieldValueInvalid,
+				Message: fmt.Sprintf("%s source snapshot is not valid", field.Child("source", "Snapshot").String()),
+				Field:   field.Child("source", "Snapshot").String(),
+			})
+			return causes
+		}
+		if request.Operation == admissionv1.Create {
+			cause := wh.validateDataVolumeSourceSnapshot(spec.Source.Snapshot, field.Child("source", "Snapshot"), spec)
+			if cause != nil {
+				causes = append(causes, *cause)
+			}
+		}
+	}
+
 	return causes
 }
 
@@ -394,7 +411,13 @@ func (wh *dataVolumeValidatingWebhook) validateSourceRef(request *admissionv1.Ad
 			Field:   field.Child("sourceRef").String(),
 		}
 	}
-	return wh.validateDataVolumeSourcePVC(dataSource.Spec.Source.PVC, field.Child("sourceRef"), spec)
+	if dataSource.Spec.Source.PVC != nil {
+		return wh.validateDataVolumeSourcePVC(dataSource.Spec.Source.PVC, field.Child("sourceRef"), spec)
+	} else if dataSource.Spec.Source.Snapshot != nil {
+		return wh.validateDataVolumeSourceSnapshot(dataSource.Spec.Source.Snapshot, field.Child("sourceRef"), spec)
+	}
+
+	return nil
 }
 
 func (wh *dataVolumeValidatingWebhook) validateDataVolumeSourcePVC(PVC *cdiv1.DataVolumeSourcePVC, field *k8sfield.Path, spec *cdiv1.DataVolumeSpec) *metav1.StatusCause {
@@ -418,6 +441,12 @@ func (wh *dataVolumeValidatingWebhook) validateDataVolumeSourcePVC(PVC *cdiv1.Da
 			Field:   field.String(),
 		}
 	}
+
+	return nil
+}
+
+func (wh *dataVolumeValidatingWebhook) validateDataVolumeSourceSnapshot(snapshot *cdiv1.DataVolumeSourceSnapshot, field *k8sfield.Path, spec *cdiv1.DataVolumeSpec) *metav1.StatusCause {
+	// No validation logic for now, don't want to block on source snapshot not existing
 
 	return nil
 }

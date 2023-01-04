@@ -67,7 +67,7 @@ var _ = Describe("All DataSource Tests", func() {
 		It("Should update Ready condition when DataSource has no source pvc", func() {
 			ds = createDataSource()
 			reconciler = createDataSourceReconciler(ds)
-			verifyConditions("No source pvc", false, noPvc)
+			verifyConditions("No source pvc", false, noSource)
 		})
 
 		It("Should update Ready condition when DataSource has source pvc", func() {

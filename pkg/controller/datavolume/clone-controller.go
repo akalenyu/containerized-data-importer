@@ -1662,7 +1662,8 @@ func (r *CloneReconciler) populateSourceIfSourceRef(dv *cdiv1.DataVolume) error 
 		return err
 	}
 	dv.Spec.Source = &cdiv1.DataVolumeSource{
-		PVC: dataSource.Spec.Source.PVC,
+		PVC:      dataSource.Spec.Source.PVC,
+		Snapshot: dataSource.Spec.Source.Snapshot,
 	}
 	return nil
 }
