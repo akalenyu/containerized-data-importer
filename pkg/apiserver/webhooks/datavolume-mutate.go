@@ -22,7 +22,9 @@ package webhooks
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
+	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,10 +52,16 @@ type sarProxy struct {
 }
 
 var (
-	tokenResource = metav1.GroupVersionResource{
+	tokenResourcePvc = metav1.GroupVersionResource{
 		Group:    "",
 		Version:  "v1",
 		Resource: "persistentvolumeclaims",
+	}
+
+	tokenResourceSnapshot = metav1.GroupVersionResource{
+		Group:    snapshotv1.GroupName,
+		Version:  snapshotv1.SchemeGroupVersion.Version,
+		Resource: "volumesnapshots",
 	}
 )
 
@@ -64,6 +72,7 @@ func (p *sarProxy) Create(sar *authv1.SubjectAccessReview) (*authv1.SubjectAcces
 func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	var dataVolume, oldDataVolume cdiv1.DataVolume
 	var pvcSource *cdiv1.DataVolumeSourcePVC
+	var snapshotSource *cdiv1.DataVolumeSourceSnapshot
 
 	klog.V(3).Infof("Got AdmissionReview %+v", ar)
 
@@ -81,7 +90,11 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 	}
 
 	if dataVolume.Spec.Source != nil {
-		pvcSource = dataVolume.Spec.Source.PVC
+		if dataVolume.Spec.Source.PVC != nil {
+			pvcSource = dataVolume.Spec.Source.PVC
+		} else if dataVolume.Spec.Source.Snapshot != nil {
+			snapshotSource = dataVolume.Spec.Source.Snapshot
+		}
 	} else if dataVolume.Spec.SourceRef != nil && dataVolume.Spec.SourceRef.Kind == cdiv1.DataVolumeDataSource {
 		ns := dataVolume.Namespace
 		if dataVolume.Spec.SourceRef.Namespace != nil && *dataVolume.Spec.SourceRef.Namespace != "" {
@@ -91,7 +104,11 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 		if err != nil {
 			return toAdmissionResponseError(err)
 		}
-		pvcSource = dataSource.Spec.Source.PVC
+		if dataSource.Spec.Source.PVC != nil {
+			pvcSource = dataSource.Spec.Source.PVC
+		} else if dataSource.Spec.Source.Snapshot != nil {
+			snapshotSource = dataSource.Spec.Source.Snapshot
+		}
 	}
 
 	targetNamespace, targetName := dataVolume.Namespace, dataVolume.Name
@@ -122,7 +139,7 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 		}
 	}
 
-	if pvcSource == nil {
+	if pvcSource == nil && snapshotSource == nil {
 		klog.V(3).Infof("DataVolume %s/%s not cloning", targetNamespace, targetName)
 		if modified {
 			return toPatchResponse(dataVolume, modifiedDataVolume)
@@ -130,7 +147,12 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 		return allowedAdmissionResponse()
 	}
 
-	sourceNamespace, sourceName := pvcSource.Namespace, pvcSource.Name
+	var sourceName, sourceNamespace string
+	if pvcSource != nil {
+		sourceName, sourceNamespace = pvcSource.Name, pvcSource.Namespace
+	} else if snapshotSource != nil {
+		sourceName, sourceNamespace = snapshotSource.Name, snapshotSource.Namespace
+	}
 	if sourceNamespace == "" {
 		sourceNamespace = targetNamespace
 	}
@@ -152,7 +174,13 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 		}
 	}
 
-	ok, reason, err := clone.CanUserClonePVC(wh.proxy, sourceNamespace, sourceName, targetNamespace, ar.Request.UserInfo)
+	var cloneAuthFunc clone.UserCloneAuthFunc
+	if pvcSource != nil {
+		cloneAuthFunc = clone.CanUserClonePVC
+	} else if snapshotSource != nil {
+		cloneAuthFunc = clone.CanUserCloneSnapshot
+	}
+	ok, reason, err := cloneAuthFunc(wh.proxy, sourceNamespace, sourceName, targetNamespace, ar.Request.UserInfo)
 	if err != nil {
 		return toAdmissionResponseError(err)
 	}
@@ -168,6 +196,10 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 		return toRejectedAdmissionResponse(causes)
 	}
 
+	tokenResource, err := getTokenResource(pvcSource, snapshotSource)
+	if err != nil {
+		return toAdmissionResponseError(err)
+	}
 	tokenData := &token.Payload{
 		Operation: token.OperationClone,
 		Name:      sourceName,
@@ -192,4 +224,14 @@ func (wh *dataVolumeMutatingWebhook) Admit(ar admissionv1.AdmissionReview) *admi
 	klog.V(3).Infof("Sending patch response...")
 
 	return toPatchResponse(dataVolume, modifiedDataVolume)
+}
+
+func getTokenResource(pvcSource *cdiv1.DataVolumeSourcePVC, snapshotSource *cdiv1.DataVolumeSourceSnapshot) (metav1.GroupVersionResource, error) {
+	if pvcSource != nil {
+		return tokenResourcePvc, nil
+	} else if snapshotSource != nil {
+		return tokenResourceSnapshot, nil
+	}
+
+	return metav1.GroupVersionResource{}, fmt.Errorf("Source is not snapshot/PVC")
 }
