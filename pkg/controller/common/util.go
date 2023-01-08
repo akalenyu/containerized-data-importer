@@ -598,12 +598,15 @@ func ValidateCloneTokenPVC(t string, v token.Validator, source, target *v1.Persi
 		return errors.Wrap(err, "error verifying token")
 	}
 
-	return validateTokenData(tokenData, source.Namespace, source.Name, target.Namespace, target.Name, string(target.UID))
+	tokenResourceName := getTokenResourceNamePvc(source)
+
+	return validateTokenData(tokenData, source.Namespace, source.Name, target.Namespace, target.Name, string(target.UID), tokenResourceName)
 }
 
 // ValidateCloneTokenDV validates clone token for DV
 func ValidateCloneTokenDV(validator token.Validator, dv *cdiv1.DataVolume) error {
-	if dv.Spec.Source.PVC == nil || dv.Spec.Source.PVC.Namespace == "" || dv.Spec.Source.PVC.Namespace == dv.Namespace {
+	sourceName, sourceNamespace := GetCloneSourceNameAndNamespace(dv)
+	if sourceNamespace == "" || sourceNamespace == dv.Namespace {
 		return nil
 	}
 
@@ -617,15 +620,38 @@ func ValidateCloneTokenDV(validator token.Validator, dv *cdiv1.DataVolume) error
 		return errors.Wrap(err, "error verifying token")
 	}
 
-	return validateTokenData(tokenData, dv.Spec.Source.PVC.Namespace, dv.Spec.Source.PVC.Name, dv.Namespace, dv.Name, "")
+	tokenResourceName := getTokenResourceNameDataVolume(dv.Spec.Source)
+	if tokenResourceName == "" {
+		return errors.New("token resource name empty, can't verify properly")
+	}
+
+	return validateTokenData(tokenData, sourceNamespace, sourceName, dv.Namespace, dv.Name, "", tokenResourceName)
 }
 
-func validateTokenData(tokenData *token.Payload, srcNamespace, srcName, targetNamespace, targetName, targetUID string) error {
+func getTokenResourceNameDataVolume(source *cdiv1.DataVolumeSource) string {
+	if source.PVC != nil {
+		return "persistentvolumeclaims"
+	} else if source.Snapshot != nil {
+		return "volumesnapshots"
+	}
+
+	return ""
+}
+
+func getTokenResourceNamePvc(sourcePvc *corev1.PersistentVolumeClaim) string {
+	if v, ok := sourcePvc.Labels[common.CDIComponentLabel]; ok && v == common.CloneFromSnapshotFallbackPVCCDILabel {
+		return "volumesnapshots"
+	}
+
+	return "persistentvolumeclaims"
+}
+
+func validateTokenData(tokenData *token.Payload, srcNamespace, srcName, targetNamespace, targetName, targetUID, tokenResourceName string) error {
 	uid := tokenData.Params["uid"]
 	if tokenData.Operation != token.OperationClone ||
 		tokenData.Name != srcName ||
 		tokenData.Namespace != srcNamespace ||
-		tokenData.Resource.Resource != "persistentvolumeclaims" ||
+		tokenData.Resource.Resource != tokenResourceName ||
 		tokenData.Params["targetNamespace"] != targetNamespace ||
 		tokenData.Params["targetName"] != targetName ||
 		(uid != "" && uid != targetUID) {
