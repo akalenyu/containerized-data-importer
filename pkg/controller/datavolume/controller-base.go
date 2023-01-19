@@ -118,7 +118,8 @@ const (
 	dataVolumeNop dataVolumeOp = iota
 	dataVolumeImport
 	dataVolumeUpload
-	dataVolumeClone
+	dataVolumePvcClone
+	dataVolumeSnapshotClone
 	dataVolumePopulator
 )
 
@@ -219,8 +220,12 @@ func addDataVolumeControllerCommonWatches(mgr manager.Manager, dataVolumeControl
 
 func getDataVolumeOp(dv *cdiv1.DataVolume) dataVolumeOp {
 	src := dv.Spec.Source
+
 	if (src != nil && src.PVC != nil) || dv.Spec.SourceRef != nil {
-		return dataVolumeClone
+		return dataVolumePvcClone
+	}
+	if (src != nil && src.Snapshot != nil) || dv.Spec.SourceRef != nil {
+		return dataVolumeSnapshotClone
 	}
 	if src == nil {
 		if dvUsesVolumePopulator(dv) {
@@ -234,6 +239,7 @@ func getDataVolumeOp(dv *cdiv1.DataVolume) dataVolumeOp {
 	if src.HTTP != nil || src.S3 != nil || src.Registry != nil || src.Blank != nil || src.Imageio != nil || src.VDDK != nil {
 		return dataVolumeImport
 	}
+
 	return dataVolumeNop
 }
 
