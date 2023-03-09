@@ -3,9 +3,11 @@ module kubevirt.io/containerized-data-importer-api
 go 1.19
 
 require (
+	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.0.1
 	github.com/openshift/api v0.0.0-20211217221424-8779abfbd571
 	k8s.io/api v0.23.5
 	k8s.io/apimachinery v0.23.5
+	k8s.io/klog/v2 v2.40.1
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
 )
 
@@ -22,7 +24,6 @@ require (
 	golang.org/x/text v0.7.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/klog/v2 v2.40.1 // indirect
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect

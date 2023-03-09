@@ -17,7 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"kubevirt.io/containerized-data-importer/pkg/clone"
+	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 	"kubevirt.io/containerized-data-importer/tests/framework"
 	"kubevirt.io/containerized-data-importer/tests/utils"
 )
@@ -235,7 +235,7 @@ var _ = Describe("Clone Auth Webhook tests", func() {
 				Expect(err).To(HaveOccurred())
 
 				// let's do manual check as well
-				allowed, reason, err := clone.CanServiceAccountClonePVC(&sarProxy{client: f.K8sClient},
+				allowed, reason, err := cdiv1.CanServiceAccountClonePVC(&sarProxy{client: f.K8sClient},
 					srcPVCDef.Namespace,
 					srcPVCDef.Name,
 					targetNamespace.Name,
@@ -260,7 +260,7 @@ var _ = Describe("Clone Auth Webhook tests", func() {
 				}, 60*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
 				// let's do another manual check as well
-				allowed, reason, err = clone.CanServiceAccountClonePVC(&sarProxy{client: f.K8sClient},
+				allowed, reason, err = cdiv1.CanServiceAccountClonePVC(&sarProxy{client: f.K8sClient},
 					srcPVCDef.Namespace,
 					srcPVCDef.Name,
 					targetNamespace.Name,
@@ -319,7 +319,7 @@ var _ = Describe("Clone Auth Webhook tests", func() {
 				Expect(err).To(HaveOccurred())
 
 				// let's do manual check as well
-				allowed, reason, err := clone.CanServiceAccountCloneSnapshot(&sarProxy{client: f.K8sClient},
+				allowed, reason, err := cdiv1.CanServiceAccountCloneSnapshot(&sarProxy{client: f.K8sClient},
 					srcPVCDef.Namespace,
 					srcPVCDef.Name,
 					targetNamespace.Name,
@@ -354,7 +354,7 @@ var _ = Describe("Clone Auth Webhook tests", func() {
 				}, 60*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
 				// let's do another manual check as well
-				allowed, reason, err = clone.CanServiceAccountCloneSnapshot(&sarProxy{client: f.K8sClient},
+				allowed, reason, err = cdiv1.CanServiceAccountCloneSnapshot(&sarProxy{client: f.K8sClient},
 					srcPVCDef.Namespace,
 					srcPVCDef.Name,
 					targetNamespace.Name,
