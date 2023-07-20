@@ -1511,6 +1511,7 @@ var _ = Describe("all clone tests", func() {
 
 				dataVolume, err := utils.CreateDataVolumeFromDefinition(f.CdiClient, f.Namespace.Name, targetDV)
 				Expect(err).ToNot(HaveOccurred())
+				f.ForceBindPvcIfDvIsWaitForFirstConsumer(dataVolume)
 				Expect(utils.GetCloneType(f.CdiClient, dataVolume)).To(Equal("csi-clone"))
 			})
 		})
@@ -3160,6 +3161,7 @@ func validateCloneType(f *framework.Framework, dv *cdiv1.DataVolume) {
 		Expect(err).ToNot(HaveOccurred())
 
 		isCrossNamespaceClone := sourcePVC.Namespace != targetPVC.Namespace
+		usesPopulator := targetPVC.Spec.DataSourceRef != nil && targetPVC.Spec.DataSourceRef.Kind == "VolumeCloneSource"
 
 		if sourcePVC.Spec.StorageClassName != nil {
 			spec, err := utils.GetStorageProfileSpec(f.CdiClient, *sourcePVC.Spec.StorageClassName)
@@ -3184,7 +3186,7 @@ func validateCloneType(f *framework.Framework, dv *cdiv1.DataVolume) {
 				targetPVC.Spec.StorageClassName != nil &&
 				*sourcePVC.Spec.StorageClassName == *targetPVC.Spec.StorageClassName &&
 				*sourcePVC.Spec.StorageClassName == f.SnapshotSCName &&
-				(!isCrossNamespaceClone || bindingMode == storagev1.VolumeBindingImmediate) &&
+				(!isCrossNamespaceClone || bindingMode == storagev1.VolumeBindingImmediate || usesPopulator) &&
 				(allowsExpansion || sourcePVC.Status.Capacity.Storage().Cmp(*targetPVC.Status.Capacity.Storage()) == 0) {
 				cloneType = "snapshot"
 			}
@@ -3193,7 +3195,7 @@ func validateCloneType(f *framework.Framework, dv *cdiv1.DataVolume) {
 				targetPVC.Spec.StorageClassName != nil &&
 				*sourcePVC.Spec.StorageClassName == *targetPVC.Spec.StorageClassName &&
 				*sourcePVC.Spec.StorageClassName == f.CsiCloneSCName &&
-				(!isCrossNamespaceClone || bindingMode == storagev1.VolumeBindingImmediate) &&
+				(!isCrossNamespaceClone || bindingMode == storagev1.VolumeBindingImmediate || usesPopulator) &&
 				(allowsExpansion || sourcePVC.Status.Capacity.Storage().Cmp(*targetPVC.Status.Capacity.Storage()) == 0) {
 
 				cloneType = "csi-clone"
