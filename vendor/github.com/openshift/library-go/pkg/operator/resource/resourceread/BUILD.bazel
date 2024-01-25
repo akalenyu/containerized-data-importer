@@ -6,6 +6,7 @@ go_library(
         "admission.go",
         "apiextensions.go",
         "apps.go",
+        "config.go",
         "core.go",
         "generic.go",
         "images.go",
@@ -21,6 +22,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/github.com/openshift/api:go_default_library",
+        "//vendor/github.com/openshift/api/config/v1:go_default_library",
         "//vendor/github.com/openshift/api/image/v1:go_default_library",
         "//vendor/github.com/openshift/api/route/v1:go_default_library",
         "//vendor/k8s.io/api/admissionregistration/v1:go_default_library",
