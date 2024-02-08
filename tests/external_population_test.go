@@ -60,7 +60,7 @@ var _ = Describe("Population tests", func() {
 	// If the AnyVolumeDataSource feature gate is disabled, Kubernetes drops the contents of the dataSourceRef field.
 	// We can then determine if the feature is enabled or not by checking that field after creating a PVC.
 	isAnyVolumeDataSourceEnabled := func() bool {
-		pvc := utils.NewPVCDefinition("test", "10Mi", nil, nil)
+		pvc := utils.NewPVCDefinition("test", "100Mi", nil, nil)
 		pvc.Spec.DataSourceRef = dummySourceRef
 		pvc, err := f.CreatePVCFromDefinition(pvc)
 		Expect(err).ToNot(HaveOccurred())

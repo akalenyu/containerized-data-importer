@@ -1417,7 +1417,7 @@ var _ = Describe("[vendor:cnv-qe@redhat.com][level:component]DataVolume tests", 
 
 			By("Create PVC")
 			annotations := map[string]string{"cdi.kubevirt.io/storage.populatedFor": dataVolumeName}
-			pvc := utils.NewPVCDefinition(dataVolumeName, "100m", annotations, nil)
+			pvc := utils.NewPVCDefinition(dataVolumeName, "100Mi", annotations, nil)
 			pvc = f.CreateBoundPVCFromDefinition(pvc)
 
 			By("Verifying Succeed with PVC Bound")
@@ -1888,11 +1888,11 @@ var _ = Describe("[vendor:cnv-qe@redhat.com][level:component]DataVolume tests", 
 
 		createCloneDataVolume := func(dataVolumeName string, storageSpec cdiv1.StorageSpec, command string) *cdiv1.DataVolume {
 			sourcePodFillerName := fmt.Sprintf("%s-filler-pod", dataVolumeName)
-			pvcDef := utils.NewPVCDefinition(pvcName, "10Mi", nil, nil)
+			pvcDef := utils.NewPVCDefinition(pvcName, "100Mi", nil, nil)
 			sourcePvc = f.CreateAndPopulateSourcePVC(pvcDef, sourcePodFillerName, command)
 
 			By(fmt.Sprintf("creating a new target PVC (datavolume) to clone %s", sourcePvc.Name))
-			dataVolume := utils.NewCloningDataVolume(dataVolumeName, "10Mi", sourcePvc)
+			dataVolume := utils.NewCloningDataVolume(dataVolumeName, "100Mi", sourcePvc)
 			dataVolume.Spec.PVC = nil
 			dataVolume.Spec.Storage = &storageSpec
 			dataVolume.Annotations[controller.AnnImmediateBinding] = "true"
