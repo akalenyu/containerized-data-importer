@@ -2664,7 +2664,7 @@ var _ = Describe("all clone tests", func() {
 			By(fmt.Sprintf("[AfterEach] Removing snapshot %s/%s", snapshot.Namespace, snapshot.Name))
 			Eventually(func() bool {
 				err := f.CrClient.Delete(context.TODO(), snapshot)
-				return err != nil && k8serrors.IsNotFound(err)
+				return err != nil
 			}, time.Minute, time.Second).Should(BeTrue())
 
 			if targetNamespace != nil {
