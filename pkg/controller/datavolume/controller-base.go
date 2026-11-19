@@ -1145,6 +1145,9 @@ func (r *ReconcilerBase) newPersistentVolumeClaim(dataVolume *cdiv1.DataVolume, 
 	for k, v := range dataVolume.Labels {
 		labels[k] = v
 	}
+	if requested := cc.GetDVRequestedSize(dataVolume); requested != nil {
+		labels[cc.LabelOriginalRequestedSizeBytes] = strconv.FormatInt(requested.Value(), 10)
+	}
 
 	annotations := make(map[string]string)
 	for k, v := range dataVolume.ObjectMeta.Annotations {
